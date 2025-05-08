@@ -4,7 +4,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 import streamlit as st
 
 # Load dataset
-df = pd.read_csv("all_movies.csv")  # your merged dataset
+df = pd.read_csv("movie.csv")  # your merged dataset
 df.fillna('', inplace=True)
 
 # Combine features
@@ -28,7 +28,7 @@ def recommend(movie):
     return df["MOVIE"].iloc[[i[0] for i in scores]].tolist()
 
 # Streamlit GUI
-st.title("🎥 Tamil Movie Recommendation System")
+st.title("🎥 Movie Recommendation System")
 
 movie_input = st.text_input("Enter a movie title to get recommendations")
 if st.button("Recommend"):
