@@ -3,9 +3,10 @@ import pandas as pd
 import requests
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+from fuzzywuzzy import process
 
 # TMDb API Key (Replace with your actual API key)
-API_KEY = "887f725faa2dadb468b5baef8c697023"
+API_KEY = "YOUR_TMDB_API_KEY"
 
 # Load dataset
 df = pd.read_csv("merged_movies.csv")
@@ -17,7 +18,7 @@ tfidf = TfidfVectorizer(stop_words="english")
 vector = tfidf.fit_transform(df["overview"])
 similarity = cosine_similarity(vector)
 
-# Get poster, rating and vote count from TMDb
+# Fetch movie poster, rating, vote count
 def get_movie_info(movie_title):
     url = f"https://api.themoviedb.org/3/search/movie?api_key={API_KEY}&query={movie_title}"
     response = requests.get(url)
@@ -31,14 +32,17 @@ def get_movie_info(movie_title):
         }
     return {"poster_url": None, "rating": "N/A", "vote_count": "N/A"}
 
-# Recommendation function
+# Recommendation function with fuzzy matching
 def recommend(movie_title):
     movie_title_lower = movie_title.lower()
     movie_list = df["title"].str.lower().tolist()
-    results = []
 
-    if movie_title_lower in movie_list:
-        idx = movie_list.index(movie_title_lower)
+    # Find best match using fuzzy matching
+    best_match = process.extractOne(movie_title_lower, movie_list)
+    
+    if best_match and best_match[1] > 80:  # Threshold for fuzzy matching
+        matched_title = best_match[0]
+        idx = movie_list.index(matched_title)
         searched_movie_title = df.loc[idx, "title"]
         searched_movie_overview = df.loc[idx, "overview"]
         movie_info = get_movie_info(searched_movie_title)
