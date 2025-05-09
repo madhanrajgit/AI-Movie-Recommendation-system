@@ -18,7 +18,7 @@ st.markdown("""
         .overview { font-size: 14px; color: white; }
         .movie-container { border: 1px solid #444; padding: 10px; border-radius: 10px; background-color: #222; text-align: center; }
         .button { background-color: gold; color: black; font-size: 16px; padding: 5px; border-radius: 8px; }
-        .ad-image { width: 60%; margin: auto; display: block; }
+        .ad-image { width: 30%; margin: auto; display: block; }
     </style>
 """, unsafe_allow_html=True)
 
