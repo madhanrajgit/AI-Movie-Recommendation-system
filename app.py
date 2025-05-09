@@ -18,7 +18,7 @@ st.markdown("""
         .overview { font-size: 14px; color: white; }
         .movie-container { border: 1px solid #444; padding: 10px; border-radius: 10px; background-color: #222; text-align: center; }
         .button { background-color: gold; color: black; font-size: 16px; padding: 5px; border-radius: 8px; }
-        .ad-image { width: 60%; margin: auto; display: block; }
+        .ad-image { width: 30%; margin: auto; display: block; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -61,9 +61,16 @@ def get_trending_movies():
     data = response.json()
     return [{"title": movie["title"], "overview": movie["overview"], "poster_url": f"https://image.tmdb.org/t/p/w500{movie['poster_path']}" if movie.get("poster_path") else None} for movie in data["results"][:4]] if data["results"] else []
 
-# Move search bar to the top
+# Move search bar to the top with inline button
 st.title("🎬 IMDb-Style AI Movie Recommender")
-movie_input = st.text_input("🔍 Search for a movie:", "")
+col1, col2 = st.columns([4, 1])
+
+with col1:
+    movie_input = st.text_input("🔍 Search for a movie:", "")
+
+with col2:
+    if st.button("🔍 Search"):
+        recommend(movie_input)
 
 # Auto-Sliding Featured Movies
 trending_movies = get_trending_movies()
@@ -99,9 +106,6 @@ def recommend(movie_title):
         st.session_state.recommended_movies = results
 
     return results
-
-if movie_input and st.button("Recommend"):
-    recommend(movie_input)
 
 # Always display recommendations, even after auto-refresh
 if st.session_state.recommended_movies:
