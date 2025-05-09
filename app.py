@@ -7,6 +7,9 @@ from sklearn.metrics.pairwise import cosine_similarity
 df = pd.read_csv("merged_movies.csv")
 df.columns = df.columns.str.strip()
 
+# Fill NaN values in overview column
+df["overview"].fillna("Overview not available", inplace=True)
+
 # TF-IDF for recommendations
 tfidf = TfidfVectorizer(stop_words="english")
 vector = tfidf.fit_transform(df["overview"].fillna(""))
@@ -17,8 +20,18 @@ def recommend(movie_title):
     movie_title_lower = movie_title.lower()
     movie_list = df["title"].str.lower().tolist()
 
+    results = []  # Store recommended movies
+
     if movie_title_lower in movie_list:
         idx = movie_list.index(movie_title_lower)
+
+        # Display searched movie's overview
+        searched_movie_title = df.loc[idx, "title"]
+        searched_movie_overview = df.loc[idx, "overview"]
+
+        st.subheader(f"✅ Your searched movie: {searched_movie_title}")
+        st.markdown(f"📖 **Overview:** {searched_movie_overview}")
+
         recommended_movies = sorted(
             list(enumerate(similarity[idx])), key=lambda x: x[1], reverse=True
         )[1:6]
@@ -28,7 +41,9 @@ def recommend(movie_title):
             for i in recommended_movies
         ]
     else:
+        st.subheader(f"❌ Movie '{movie_title}' not found. Showing top popular movies!")
         top_popular = df.sort_values("popularity", ascending=False).head(5)
+
         results = [
             {"title": row["title"], "overview": row["overview"]}
             for _, row in top_popular.iterrows()
@@ -45,12 +60,7 @@ if st.button("Recommend"):
     if movie_input:
         results = recommend(movie_input)
 
-        if movie_input.lower() in df["title"].str.lower().tolist():
-            st.subheader(f"✅ Your searched movie: {movie_input}")
-        else:
-            st.subheader(f"❌ Movie '{movie_input}' not found. Showing top popular movies!")
-
         for movie in results:
             st.write(f"**👉 {movie['title']}**")
-            st.write(f"📖 {movie['overview']}\n")
+            st.markdown(f"📖 **Overview:** {movie['overview']}")
 
