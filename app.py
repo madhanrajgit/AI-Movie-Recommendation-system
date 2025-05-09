@@ -84,9 +84,9 @@ def recommend(movie_title):
         st.markdown(f"⭐ **Rating:** {movie_info_batch[searched_movie_title]['rating']} / 10 ({movie_info_batch[searched_movie_title]['vote_count']} votes)")
 
         if movie_info_batch[searched_movie_title]["poster_url"]:
-            st.image(movie_info_batch[searched_movie_title]["poster_url"], caption=searched_movie_title)
+            st.image(movie_info_batch[searched_movie_title]["poster_url"], caption=searched_movie_title, use_container_width=True)
         else:
-            st.image("https://via.placeholder.com/500x750.png?text=No+Poster+Available", caption="No Poster Available")
+            st.image("https://via.placeholder.com/500x750.png?text=No+Poster+Available", caption="No Poster Available", use_container_width=True)
 
         recommended_movies = sorted(list(enumerate(similarity[idx])), key=lambda x: x[1], reverse=True)[1:6]
         recommended_titles = [df.loc[i[0], "title"] for i in recommended_movies]
@@ -102,7 +102,7 @@ st.title("🎬 IMDb-Style AI Movie Recommender")
 # Trending Movie Banner
 trending = get_trending_movie()
 if trending:
-    st.image(trending["poster_url"], use_column_width=True, caption=f"🔥 Trending Now: {trending['title']}")
+    st.image(trending["poster_url"], use_container_width=True, caption=f"🔥 Trending Now: {trending['title']}")
     st.markdown(f"📖 **Overview:** {trending['overview']}")
     st.markdown(f"⭐ **Rating:** {trending['rating']} / 10 ({trending['vote_count']} votes)")
 
@@ -119,7 +119,7 @@ if st.button("Recommend"):
         for i, movie in enumerate(results):
             with cols[i % 3]:
                 st.markdown('<div class="movie-container">', unsafe_allow_html=True)
-                st.image(movie["poster_url"] if movie["poster_url"] else "https://via.placeholder.com/500x750.png?text=No+Poster+Available", caption=movie["title"])
+                st.image(movie["poster_url"] if movie["poster_url"] else "https://via.placeholder.com/500x750.png?text=No+Poster+Available", caption=movie["title"], use_container_width=True)
                 st.markdown(f'<p class="rating">⭐ {movie["title"]}</p>', unsafe_allow_html=True)
                 st.markdown(f'<p class="overview">{movie["overview"]}</p>', unsafe_allow_html=True)
                 st.markdown(f'<button class="button">More Like This</button>', unsafe_allow_html=True)
@@ -129,4 +129,3 @@ if st.button("Recommend"):
 if movie_input:
     rating = st.slider("⭐ Rate this movie:", 1, 10, 5)
     st.write(f"You rated {movie_input} {rating}/10!")
-
