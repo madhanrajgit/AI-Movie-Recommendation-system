@@ -61,25 +61,7 @@ def get_trending_movies():
     data = response.json()
     return [{"title": movie["title"], "overview": movie["overview"], "poster_url": f"https://image.tmdb.org/t/p/w500{movie['poster_path']}" if movie.get("poster_path") else None} for movie in data["results"][:4]] if data["results"] else []
 
-# Move search bar to the top with inline button
-st.title("🎬 IMDb-Style AI Movie Recommender")
-col1, col2 = st.columns([4, 1])
-
-with col1:
-    movie_input = st.text_input("🔍 Search for a movie:", "")
-
-with col2:
-    if st.button("🔍 Search"):
-        recommend(movie_input)
-
-# Auto-Sliding Featured Movies
-trending_movies = get_trending_movies()
-count = st_autorefresh(interval=5000, key="auto_refresh")  # Auto-refresh every 5s
-current_movie = trending_movies[count % len(trending_movies)]
-st.image(current_movie["poster_url"], use_container_width=True, caption=f"🔥 Featured: {current_movie['title']}")
-st.markdown(f"📖 {current_movie['overview']}")
-
-# Movie recommendation function with fuzzy matching
+# Movie recommendation function with fuzzy matching (Moved to the top)
 def recommend(movie_title):
     movie_title_lower = movie_title.lower()
     movie_list = df["title"].str.lower().tolist()
@@ -106,6 +88,24 @@ def recommend(movie_title):
         st.session_state.recommended_movies = results
 
     return results
+
+# Move search bar to the top with inline button
+st.title("🎬 IMDb-Style AI Movie Recommender")
+col1, col2 = st.columns([4, 1])
+
+with col1:
+    movie_input = st.text_input("🔍 Search for a movie:", "")
+
+with col2:
+    if st.button("🔍 Search"):
+        recommend(movie_input)
+
+# Auto-Sliding Featured Movies
+trending_movies = get_trending_movies()
+count = st_autorefresh(interval=5000, key="auto_refresh")  # Auto-refresh every 5s
+current_movie = trending_movies[count % len(trending_movies)]
+st.image(current_movie["poster_url"], use_container_width=True, caption=f"🔥 Featured: {current_movie['title']}")
+st.markdown(f"📖 {current_movie['overview']}")
 
 # Always display recommendations, even after auto-refresh
 if st.session_state.recommended_movies:
