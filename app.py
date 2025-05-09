@@ -2,7 +2,7 @@ import streamlit as st
 import main  # Import backend logic from main.py
 from streamlit_autorefresh import st_autorefresh
 
-# UI Styling
+# Apply UI Styling
 st.markdown("""
     <style>
         body { background-color: #121212; color: white; font-family: Arial, sans-serif; }
@@ -39,16 +39,22 @@ if "selected_movie" in st.session_state:
 
     if movie_info["poster_url"]:
         st.image(movie_info["poster_url"], caption=st.session_state.selected_movie, use_container_width=True)
+    else:
+        st.image("https://via.placeholder.com/500x750.png?text=No+Poster+Available", caption="No Poster Available", use_container_width=True)
 
-    st.markdown(f"⭐ **Rating:** {movie_info['rating']} / 10 ({movie_info['vote_count']} votes)")
+    overview_text = main.df[main.df["title"] == st.session_state.selected_movie]["overview"].values[0] if not main.df.empty else "No overview available."
+    st.markdown(f"📖 **Overview:** {overview_text}")
 
     # Show Recommendations
     st.subheader("🔹 Recommended Movies")
     for movie in st.session_state.recommended_movies:
         st.write(f"🎬 [{movie}](?selected_movie={movie})")
 
-# Auto-Sliding Featured Movies
-if not movie_input or st.button("🏠 Back to Home"):
+# Fix Error When `df.sample(4)` is Called in `app.py`
+if not main.df.empty:  # ✅ Prevents AttributeError when dataset is missing
     trending_movies = [main.get_movie_info(title) for title in main.df.sample(4)["title"].tolist()]
     for movie in trending_movies:
-        st.image(movie["poster_url"], use_container_width=True, caption=f"🔥 Featured: {movie['id']}")
+        if movie["poster_url"]:
+            st.image(movie["poster_url"], use_container_width=True, caption=f"🔥 Featured: {movie['id']}")
+else:
+    st.warning("⚠️ No movie data available. Please check `merged_movies.csv`.")
