@@ -42,7 +42,13 @@ if "selected_movie" in st.session_state:
     else:
         st.image("https://via.placeholder.com/500x750.png?text=No+Poster+Available", caption="No Poster Available", use_container_width=True)
 
-    overview_text = main.df[main.df["title"] == st.session_state.selected_movie]["overview"].values[0] if not main.df.empty else "No overview available."
+    selected_movie_df = main.df[main.df["title"] == st.session_state.selected_movie]
+
+    if not selected_movie_df.empty:
+        overview_text = selected_movie_df["overview"].values[0]
+    else:
+        overview_text = "No overview available."
+
     st.markdown(f"📖 **Overview:** {overview_text}")
 
     # Show Recommendations
