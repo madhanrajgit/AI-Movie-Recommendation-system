@@ -22,15 +22,22 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Load dataset
-df = pd.read_csv("merged_movies.csv")
-df.columns = df.columns.str.strip()
-df["overview"].fillna("Overview not available", inplace=True)
+# Load dataset safely
+try:
+    df = pd.read_csv("merged_movies.csv")
+    if df.empty:
+        raise pd.errors.EmptyDataError  # If no data is present, raise an error
+    df.columns = df.columns.str.strip()
+    df["overview"].fillna("Overview not available", inplace=True)
+except (FileNotFoundError, pd.errors.EmptyDataError):
+    st.error("⚠️ Error: The dataset `merged_movies.csv` is missing or empty. Please check the file and try again.")
+    df = pd.DataFrame()  # Initialize an empty DataFrame to avoid crashes
 
-# TF-IDF vectorization for recommendations
-tfidf = TfidfVectorizer(stop_words="english")
-vector = tfidf.fit_transform(df["overview"])
-similarity = cosine_similarity(vector)
+# TF-IDF vectorization for recommendations (only if data exists)
+if not df.empty:
+    tfidf = TfidfVectorizer(stop_words="english")
+    vector = tfidf.fit_transform(df["overview"])
+    similarity = cosine_similarity(vector)
 
 # Ensure recommendations persist
 if "recommended_movies" not in st.session_state:
@@ -63,6 +70,10 @@ def get_trending_movies():
 
 # Movie recommendation function with fuzzy matching (Moved to the top)
 def recommend(movie_title):
+    if df.empty:
+        st.warning("⚠️ No movie data available. Please check `merged_movies.csv`.")
+        return []
+
     movie_title_lower = movie_title.lower()
     movie_list = df["title"].str.lower().tolist()
     best_match = process.extractOne(movie_title_lower, movie_list)
@@ -97,15 +108,16 @@ with col1:
     movie_input = st.text_input("🔍 Search for a movie:", "")
 
 with col2:
-    if st.button("🔍 Search"):
+    if st.button("🔍 Search") and movie_input:
         recommend(movie_input)
 
 # Auto-Sliding Featured Movies
 trending_movies = get_trending_movies()
 count = st_autorefresh(interval=5000, key="auto_refresh")  # Auto-refresh every 5s
-current_movie = trending_movies[count % len(trending_movies)]
-st.image(current_movie["poster_url"], use_container_width=True, caption=f"🔥 Featured: {current_movie['title']}")
-st.markdown(f"📖 {current_movie['overview']}")
+if trending_movies:
+    current_movie = trending_movies[count % len(trending_movies)]
+    st.image(current_movie["poster_url"], use_container_width=True, caption=f"🔥 Featured: {current_movie['title']}")
+    st.markdown(f"📖 {current_movie['overview']}")
 
 # Always display recommendations, even after auto-refresh
 if st.session_state.recommended_movies:
