@@ -44,64 +44,79 @@ if "recommended_movies" not in st.session_state:
     st.session_state.recommended_movies = []
 
 # Fetch movie details from TMDb
-def get_movie_info_batch(movie_titles):
-    results = {}
-    for title in movie_titles:
-        url = f"https://api.themoviedb.org/3/search/movie?api_key={API_KEY}&query={title}"
-        response = requests.get(url)
-        data = response.json()
-        if data["results"]:
-            result = data["results"][0]
-            results[title] = {
-                "poster_url": f"https://image.tmdb.org/t/p/w500{result['poster_path']}" if result.get("poster_path") else None,
-                "rating": result.get("vote_average", "N/A"),
-                "vote_count": result.get("vote_count", "N/A")
-            }
-        else:
-            results[title] = {"poster_url": None, "rating": "N/A", "vote_count": "N/A"}
-    return results
-
-# Fetch trending movies (For Auto-Sliding Banner)
-def get_trending_movies():
-    url = f"https://api.themoviedb.org/3/trending/movie/week?api_key={API_KEY}"
+def get_movie_info(movie_title):
+    url = f"https://api.themoviedb.org/3/search/movie?api_key={API_KEY}&query={movie_title}"
     response = requests.get(url)
     data = response.json()
-    return [{"title": movie["title"], "overview": movie["overview"], "poster_url": f"https://image.tmdb.org/t/p/w500{movie['poster_path']}" if movie.get("poster_path") else None} for movie in data["results"][:4]] if data["results"] else []
+    if data["results"]:
+        result = data["results"][0]
+        return {
+            "poster_url": f"https://image.tmdb.org/t/p/w500{result['poster_path']}" if result.get("poster_path") else None,
+            "rating": result.get("vote_average", "N/A"),
+            "vote_count": result.get("vote_count", "N/A"),
+            "id": result["id"]
+        }
+    return {"poster_url": None, "rating": "N/A", "vote_count": "N/A", "id": None}
 
-# Movie recommendation function with fuzzy matching (Moved to the top)
-def recommend(movie_title):
+# Genre-Based Recommendations
+def get_genre_recommendations(movie_title):
     if df.empty:
-        st.warning("⚠️ No movie data available. Please check `merged_movies.csv`.")
         return []
+    genres = df[df["title"].str.lower() == movie_title.lower()]["genres"]
+    if genres.empty:
+        return []
+    genre_movies = df[df["genres"].str.contains(genres.values[0], na=False)]
+    return genre_movies["title"].tolist()
 
-    movie_title_lower = movie_title.lower()
-    movie_list = df["title"].str.lower().tolist()
-    best_match = process.extractOne(movie_title_lower, movie_list)
-    results = []
+# Overview-Based Recommendations
+def get_overview_recommendations(movie_title):
+    if df.empty:
+        return []
+    movie_index = df[df["title"].str.lower() == movie_title.lower()].index
+    if movie_index.empty:
+        return []
+    scores = list(enumerate(similarity[movie_index[0]]))
+    scores = sorted(scores, key=lambda x: x[1], reverse=True)[1:6]
+    return [df.iloc[i[0]]["title"] for i in scores]
 
-    if best_match and best_match[1] > 80:
-        matched_title = best_match[0]
-        idx = movie_list.index(matched_title)
-        searched_movie_title = df.loc[idx, "title"]
-        searched_movie_overview = df.loc[idx, "overview"]
-        movie_info_batch = get_movie_info_batch([searched_movie_title])
+# Crew-Based Recommendations (Directors, Writers, Actors)
+def get_crew_recommendations(movie_title):
+    if df.empty:
+        return []
+    crew_members = df[df["title"].str.lower() == movie_title.lower()]["crew"]
+    if crew_members.empty:
+        return []
+    crew_movies = df[df["crew"].str.contains(crew_members.values[0], na=False)]
+    return crew_movies["title"].tolist()
 
-        recommended_movies = sorted(list(enumerate(similarity[idx])), key=lambda x: x[1], reverse=True)[1:6]
-        recommended_titles = [df.loc[i[0], "title"] for i in recommended_movies]
-        movie_info_batch.update(get_movie_info_batch(recommended_titles))
+# Generate Movie Details Page
+def show_movie_details(movie_title):
+    movie_info = get_movie_info(movie_title)
+    st.subheader(f"🎬 {movie_title}")
+    
+    if movie_info["poster_url"]:
+        st.image(movie_info["poster_url"], caption=movie_title, use_container_width=True)
+    
+    st.markdown(f"⭐ **Rating:** {movie_info['rating']} / 10 ({movie_info['vote_count']} votes)")
+    
+    genre_recommendations = get_genre_recommendations(movie_title)
+    overview_recommendations = get_overview_recommendations(movie_title)
+    crew_recommendations = get_crew_recommendations(movie_title)
+    
+    st.subheader("🎯 Recommended Movies Based on Genre")
+    for movie in genre_recommendations:
+        st.write(f"🔹 [{movie}](?selected_movie={movie})")
+    
+    st.subheader("🎯 Recommended Movies Based on Overview")
+    for movie in overview_recommendations:
+        st.write(f"🔹 [{movie}](?selected_movie={movie})")
+    
+    st.subheader("🎯 Recommended Movies Based on Crew")
+    for movie in crew_recommendations:
+        st.write(f"🔹 [{movie}](?selected_movie={movie})")
 
-        results = [
-            {"title": title, "overview": df.loc[df["title"] == title, "overview"].values[0], "poster_url": movie_info_batch[title]["poster_url"]}
-            for title in recommended_titles
-        ]
-        
-        # Store results in session state
-        st.session_state.recommended_movies = results
-
-    return results
-
-# Move search bar to the top with inline button
-st.title("🎬 AI Movie Recommender")
+# UI Layout
+st.title("🎬 IMDb-Style AI Movie Recommender")
 col1, col2 = st.columns([4, 1])
 
 with col1:
@@ -109,29 +124,14 @@ with col1:
 
 with col2:
     if st.button("🔍 Search") and movie_input:
-        recommend(movie_input)
+        st.session_state.selected_movie = movie_input
+
+# Display Movie Details if Selected
+if "selected_movie" in st.session_state:
+    show_movie_details(st.session_state.selected_movie)
 
 # Auto-Sliding Featured Movies
-trending_movies = get_trending_movies()
-count = st_autorefresh(interval=5000, key="auto_refresh")  # Auto-refresh every 5s
-if trending_movies:
-    current_movie = trending_movies[count % len(trending_movies)]
-    st.image(current_movie["poster_url"], use_container_width=True, caption=f"🔥 Featured: {current_movie['title']}")
-    st.markdown(f"📖 {current_movie['overview']}")
-
-# Always display recommendations, even after auto-refresh
-if st.session_state.recommended_movies:
-    st.subheader("🔹 Recommended Movies")
-    cols = st.columns(3)
-    for i, movie in enumerate(st.session_state.recommended_movies):
-        with cols[i % 3]:
-            st.markdown('<div class="movie-container">', unsafe_allow_html=True)
-            st.image(movie["poster_url"] if movie["poster_url"] else "https://via.placeholder.com/500x750.png?text=No+Poster+Available", caption=movie["title"], use_container_width=True)
-            st.markdown(f'<p class="rating">⭐ {movie["title"]}</p>', unsafe_allow_html=True)
-            st.markdown(f'<p class="overview">{movie["overview"]}</p>', unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-
-# Add User Rating Feature
-if movie_input:
-    rating = st.slider("⭐ Rate this movie:", 1, 10, 5)
-    st.write(f"You rated {movie_input} {rating}/10!")
+if not movie_input or st.button("🏠 Back to Home"):
+    trending_movies = [get_movie_info(title) for title in df.sample(4)["title"].tolist()]
+    for movie in trending_movies:
+        st.image(movie["poster_url"], use_container_width=True, caption=f"🔥 Featured: {movie['id']}")
