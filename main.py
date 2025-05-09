@@ -4,7 +4,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from fuzzywuzzy import process
 
-# TMDb API Key (Ensure it's secured properly!)
+# TMDb API Key (Keep this secure!)
 API_KEY = "887f725faa2dadb468b5baef8c697023"
 
 # Load dataset safely
@@ -28,11 +28,12 @@ if not df.empty:
     vector = tfidf.fit_transform(df["overview"])
     similarity = cosine_similarity(vector)
 
-# Function to fetch movie details from TMDb
+# Fetch movie details from TMDb
 def get_movie_info(movie_title):
     url = f"https://api.themoviedb.org/3/search/movie?api_key={API_KEY}&query={movie_title}"
     response = requests.get(url).json()
-    if response["results"]:
+    
+    if "results" in response and response["results"]:
         result = response["results"][0]
         return {
             "poster_url": f"https://image.tmdb.org/t/p/w500{result['poster_path']}" if result.get("poster_path") else None,
@@ -40,9 +41,10 @@ def get_movie_info(movie_title):
             "vote_count": result.get("vote_count", "N/A"),
             "id": result["id"]
         }
+    
     return {"poster_url": None, "rating": "N/A", "vote_count": "N/A", "id": None}
 
-# Function to generate recommendations
+# Generate recommendations
 def recommend(movie_title):
     movie_title_lower = movie_title.lower()
     movie_list = df["title"].str.lower().tolist()
