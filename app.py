@@ -1,9 +1,11 @@
 import streamlit as st
 import pandas as pd
 import requests
-from bs4 import BeautifulSoup
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+
+# TMDb API Key (Replace with your actual API key)
+API_KEY = "887f725faa2dadb468b5baef8c697023"
 
 # Load dataset
 df = pd.read_csv("merged_movies.csv")
@@ -17,26 +19,15 @@ tfidf = TfidfVectorizer(stop_words="english")
 vector = tfidf.fit_transform(df["overview"].fillna(""))
 similarity = cosine_similarity(vector)
 
-# Function to get movie posters from IMDb
-def get_poster_url(movie_title):
-    try:
-        search_url = f"https://www.imdb.com/find?q={movie_title.replace(' ', '+')}&s=tt"
-        response = requests.get(search_url)
-        soup = BeautifulSoup(response.text, "html.parser")
-        result = soup.find("td", class_="result_text")
-
-        if result:
-            movie_url = "https://www.imdb.com" + result.a["href"]
-            response = requests.get(movie_url)
-            soup = BeautifulSoup(response.text, "html.parser")
-            poster_element = soup.find("div", class_="poster")
-
-            if poster_element and poster_element.img:
-                return poster_element.img["src"]
-
-        return None
-    except Exception as e:
-        return None
+# Function to fetch movie posters from TMDb
+def get_movie_poster(movie_title):
+    url = f"https://api.themoviedb.org/3/search/movie?api_key={API_KEY}&query={movie_title}"
+    response = requests.get(url)
+    data = response.json()
+    if data["results"]:
+        poster_path = data["results"][0]["poster_path"]
+        return f"https://image.tmdb.org/t/p/w500{poster_path}"
+    return None
 
 # Recommendation function
 def recommend(movie_title):
@@ -50,7 +41,7 @@ def recommend(movie_title):
         # Display searched movie's overview and poster
         searched_movie_title = df.loc[idx, "title"]
         searched_movie_overview = df.loc[idx, "overview"]
-        poster_url = get_poster_url(searched_movie_title)
+        poster_url = get_movie_poster(searched_movie_title)
 
         st.subheader(f"✅ Your searched movie: {searched_movie_title}")
         st.markdown(f"📖 **Overview:** {searched_movie_overview}")
@@ -93,7 +84,7 @@ if st.button("Recommend"):
             st.markdown(f"📖 **Overview:** {movie['overview']}")
 
             # Display poster for recommended movies
-            poster_url = get_poster_url(movie["title"])
+            poster_url = get_movie_poster(movie["title"])
             if poster_url:
                 st.image(poster_url, caption=movie["title"])
             else:
