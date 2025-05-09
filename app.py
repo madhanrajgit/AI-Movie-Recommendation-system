@@ -18,7 +18,7 @@ st.markdown("""
         .overview { font-size: 14px; color: white; }
         .movie-container { border: 1px solid #444; padding: 10px; border-radius: 10px; background-color: #222; text-align: center; }
         .button { background-color: gold; color: black; font-size: 16px; padding: 5px; border-radius: 8px; }
-        .ad-image { width: 30%; margin: auto; display: block; }
+        .ad-image { width: 60%; margin: auto; display: block; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -31,6 +31,10 @@ df["overview"].fillna("Overview not available", inplace=True)
 tfidf = TfidfVectorizer(stop_words="english")
 vector = tfidf.fit_transform(df["overview"])
 similarity = cosine_similarity(vector)
+
+# Ensure recommendations persist
+if "recommended_movies" not in st.session_state:
+    st.session_state.recommended_movies = []
 
 # Fetch movie details from TMDb
 def get_movie_info_batch(movie_titles):
@@ -57,6 +61,10 @@ def get_trending_movies():
     data = response.json()
     return [{"title": movie["title"], "overview": movie["overview"], "poster_url": f"https://image.tmdb.org/t/p/w500{movie['poster_path']}" if movie.get("poster_path") else None} for movie in data["results"][:4]] if data["results"] else []
 
+# Move search bar to the top
+st.title("🎬 IMDb-Style AI Movie Recommender")
+movie_input = st.text_input("🔍 Search for a movie:", "")
+
 # Auto-Sliding Featured Movies
 trending_movies = get_trending_movies()
 count = st_autorefresh(interval=5000, key="auto_refresh")  # Auto-refresh every 5s
@@ -78,44 +86,34 @@ def recommend(movie_title):
         searched_movie_overview = df.loc[idx, "overview"]
         movie_info_batch = get_movie_info_batch([searched_movie_title])
 
-        st.subheader(f"✅ Your searched movie: {searched_movie_title}")
-        st.markdown(f"📖 **Overview:** {searched_movie_overview}")
-        st.markdown(f"⭐ **Rating:** {movie_info_batch[searched_movie_title]['rating']} / 10 ({movie_info_batch[searched_movie_title]['vote_count']} votes)")
-
-        if movie_info_batch[searched_movie_title]["poster_url"]:
-            st.image(movie_info_batch[searched_movie_title]["poster_url"], caption=searched_movie_title, use_container_width=True)
-        else:
-            st.image("https://via.placeholder.com/500x750.png?text=No+Poster+Available", caption="No Poster Available", use_container_width=True)
-
         recommended_movies = sorted(list(enumerate(similarity[idx])), key=lambda x: x[1], reverse=True)[1:6]
         recommended_titles = [df.loc[i[0], "title"] for i in recommended_movies]
         movie_info_batch.update(get_movie_info_batch(recommended_titles))
 
-        results = [{"title": title, "overview": df.loc[df["title"] == title, "overview"].values[0], "poster_url": movie_info_batch[title]["poster_url"]} for title in recommended_titles]
+        results = [
+            {"title": title, "overview": df.loc[df["title"] == title, "overview"].values[0], "poster_url": movie_info_batch[title]["poster_url"]}
+            for title in recommended_titles
+        ]
+        
+        # Store results in session state
+        st.session_state.recommended_movies = results
 
     return results
 
-# Streamlit UI
-st.title("🎬 IMDb-Style AI Movie Recommender")
+if movie_input and st.button("Recommend"):
+    recommend(movie_input)
 
-# Movie Search Input
-movie_input = st.text_input("🔍 Search for a movie:", "")
-
-if st.button("Recommend"):
-    if movie_input:
-        results = recommend(movie_input)
-
-        # IMDb-Style Movie Grid
-        st.subheader("🔹 Recommended Movies")
-        cols = st.columns(3)
-        for i, movie in enumerate(results):
-            with cols[i % 3]:
-                st.markdown('<div class="movie-container">', unsafe_allow_html=True)
-                st.image(movie["poster_url"] if movie["poster_url"] else "https://via.placeholder.com/500x750.png?text=No+Poster+Available", caption=movie["title"], use_container_width=True)
-                st.markdown(f'<p class="rating">⭐ {movie["title"]}</p>', unsafe_allow_html=True)
-                st.markdown(f'<p class="overview">{movie["overview"]}</p>', unsafe_allow_html=True)
-                st.markdown(f'<button class="button">More Like This</button>', unsafe_allow_html=True)
-                st.markdown('</div>', unsafe_allow_html=True)
+# Always display recommendations, even after auto-refresh
+if st.session_state.recommended_movies:
+    st.subheader("🔹 Recommended Movies")
+    cols = st.columns(3)
+    for i, movie in enumerate(st.session_state.recommended_movies):
+        with cols[i % 3]:
+            st.markdown('<div class="movie-container">', unsafe_allow_html=True)
+            st.image(movie["poster_url"] if movie["poster_url"] else "https://via.placeholder.com/500x750.png?text=No+Poster+Available", caption=movie["title"], use_container_width=True)
+            st.markdown(f'<p class="rating">⭐ {movie["title"]}</p>', unsafe_allow_html=True)
+            st.markdown(f'<p class="overview">{movie["overview"]}</p>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
 
 # Add User Rating Feature
 if movie_input:
