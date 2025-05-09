@@ -4,6 +4,7 @@ import requests
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from fuzzywuzzy import process
+from streamlit_autorefresh import st_autorefresh
 
 # TMDb API Key
 API_KEY = "887f725faa2dadb468b5baef8c697023"
@@ -17,6 +18,7 @@ st.markdown("""
         .overview { font-size: 14px; color: white; }
         .movie-container { border: 1px solid #444; padding: 10px; border-radius: 10px; background-color: #222; text-align: center; }
         .button { background-color: gold; color: black; font-size: 16px; padding: 5px; border-radius: 8px; }
+        .ad-image { width: 60%; margin: auto; display: block; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -30,7 +32,7 @@ tfidf = TfidfVectorizer(stop_words="english")
 vector = tfidf.fit_transform(df["overview"])
 similarity = cosine_similarity(vector)
 
-# Fetch multiple movie details at once
+# Fetch movie details from TMDb
 def get_movie_info_batch(movie_titles):
     results = {}
     for title in movie_titles:
@@ -48,30 +50,27 @@ def get_movie_info_batch(movie_titles):
             results[title] = {"poster_url": None, "rating": "N/A", "vote_count": "N/A"}
     return results
 
-# Fetch trending movie for a banner
-def get_trending_movie():
+# Fetch trending movies (For Auto-Sliding Banner)
+def get_trending_movies():
     url = f"https://api.themoviedb.org/3/trending/movie/week?api_key={API_KEY}"
     response = requests.get(url)
     data = response.json()
-    if data["results"]:
-        movie = data["results"][0]
-        return {
-            "title": movie["title"],
-            "overview": movie["overview"],
-            "poster_url": f"https://image.tmdb.org/t/p/w500{movie['poster_path']}" if movie.get("poster_path") else None,
-            "rating": movie.get("vote_average", "N/A"),
-            "vote_count": movie.get("vote_count", "N/A")
-        }
-    return None
+    return [{"title": movie["title"], "overview": movie["overview"], "poster_url": f"https://image.tmdb.org/t/p/w500{movie['poster_path']}" if movie.get("poster_path") else None} for movie in data["results"][:4]] if data["results"] else []
+
+# Auto-Sliding Featured Movies
+trending_movies = get_trending_movies()
+count = st_autorefresh(interval=5000, key="auto_refresh")  # Auto-refresh every 5s
+current_movie = trending_movies[count % len(trending_movies)]
+st.image(current_movie["poster_url"], use_container_width=True, caption=f"🔥 Featured: {current_movie['title']}")
+st.markdown(f"📖 {current_movie['overview']}")
 
 # Movie recommendation function with fuzzy matching
 def recommend(movie_title):
     movie_title_lower = movie_title.lower()
     movie_list = df["title"].str.lower().tolist()
-
     best_match = process.extractOne(movie_title_lower, movie_list)
-
     results = []
+
     if best_match and best_match[1] > 80:
         matched_title = best_match[0]
         idx = movie_list.index(matched_title)
@@ -98,13 +97,6 @@ def recommend(movie_title):
 
 # Streamlit UI
 st.title("🎬 IMDb-Style AI Movie Recommender")
-
-# Trending Movie Banner
-trending = get_trending_movie()
-if trending:
-    st.image(trending["poster_url"], use_container_width=True, caption=f"🔥 Trending Now: {trending['title']}")
-    st.markdown(f"📖 **Overview:** {trending['overview']}")
-    st.markdown(f"⭐ **Rating:** {trending['rating']} / 10 ({trending['vote_count']} votes)")
 
 # Movie Search Input
 movie_input = st.text_input("🔍 Search for a movie:", "")
