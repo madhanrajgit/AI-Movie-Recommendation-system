@@ -58,7 +58,7 @@ def recommend(movie_title):
         if poster_url:
             st.image(poster_url, caption=searched_movie_title)
         else:
-            st.image("default_poster.jpg", caption="No Poster Available")
+            st.image("https://via.placeholder.com/500x750.png?text=No+Poster+Available", caption="No Poster Available")
 
         recommended_movies = sorted(
             list(enumerate(similarity[idx])), key=lambda x: x[1], reverse=True
@@ -97,4 +97,4 @@ if st.button("Recommend"):
             if poster_url:
                 st.image(poster_url, caption=movie["title"])
             else:
-                st.image("default_poster.jpg", caption="No Poster Available")
+                st.image("https://via.placeholder.com/500x750.png?text=No+Poster+Available", caption="No Poster Available")
