@@ -44,7 +44,7 @@ def get_movie_info(movie_title):
     
     return {"poster_url": None, "rating": "N/A", "vote_count": "N/A", "id": None}
 
-# Generate recommendations
+# Generate recommendations (Improved Accuracy)
 def recommend(movie_title):
     if df.empty:  # ✅ Prevent errors if dataset is missing
         return None
