@@ -101,7 +101,7 @@ def recommend(movie_title):
     return results
 
 # Move search bar to the top with inline button
-st.title("🎬 IMDb-Style AI Movie Recommender")
+st.title("🎬 AI Movie Recommender")
 col1, col2 = st.columns([4, 1])
 
 with col1:
