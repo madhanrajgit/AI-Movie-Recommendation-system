@@ -1,11 +1,11 @@
-import streamlit as st
 import pandas as pd
 import requests
+import streamlit as st
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 # TMDb API Key (Replace with your actual API key)
-API_KEY = "887f725faa2dadb468b5baef8c697023"
+API_KEY = "YOUR_TMDB_API_KEY"
 
 # Load dataset
 df = pd.read_csv("merged_movies.csv")
@@ -17,7 +17,7 @@ tfidf = TfidfVectorizer(stop_words="english")
 vector = tfidf.fit_transform(df["overview"])
 similarity = cosine_similarity(vector)
 
-# Get poster, rating and vote count from TMDb
+# Get poster, rating, and vote count from TMDb
 def get_movie_info(movie_title):
     url = f"https://api.themoviedb.org/3/search/movie?api_key={API_KEY}&query={movie_title}"
     response = requests.get(url)
@@ -48,9 +48,9 @@ def recommend(movie_title):
         st.markdown(f"⭐ **Rating:** {movie_info['rating']} / 10 ({movie_info['vote_count']} votes)")
 
         if movie_info["poster_url"]:
-            st.image(movie_info["poster_url"], caption=searched_movie_title)
+            st.image(movie_info["poster_url"], caption=searched_movie_title, width=200)
         else:
-            st.image("https://via.placeholder.com/500x750.png?text=No+Poster+Available", caption="No Poster Available")
+            st.image("https://via.placeholder.com/200x300.png?text=No+Poster+Available", caption="No Poster Available")
 
         recommended_movies = sorted(list(enumerate(similarity[idx])), key=lambda x: x[1], reverse=True)[1:6]
 
@@ -70,35 +70,35 @@ def recommend(movie_title):
     return results
 
 # Streamlit UI
+st.set_page_config(page_title="AI Movie Recommender", layout="wide")
 st.title("🎬 AI Movie Recommender")
 
-movie_input = st.text_input("Enter a movie name:", "")
+# Search bar
+movie_input = st.text_input("🔍 Enter a movie name:", "")
 
+# Recommendation button
 if st.button("Recommend"):
     if movie_input:
         results = recommend(movie_input)
 
-        for movie in results:
-            st.write(f"**👉 {movie['title']}**")
-            st.markdown(f"📖 **Overview:** {movie['overview']}")
-            movie_info = get_movie_info(movie['title'])
-            st.markdown(f"⭐ **Rating:** {movie_info['rating']} / 10 ({movie_info['vote_count']} votes)")
+        # Display results in a grid layout
+        cols = st.columns(3)
+        for i, movie in enumerate(results):
+            with cols[i % 3]:
+                st.markdown(f"**👉 {movie['title']}**")
+                st.markdown(f"📖 **Overview:** {movie['overview']}")
+                movie_info = get_movie_info(movie['title'])
+                st.markdown(f"⭐ **Rating:** {movie_info['rating']} / 10 ({movie_info['vote_count']} votes)")
 
-            if movie_info["poster_url"]:
-                st.image(movie_info["poster_url"], caption=movie['title'])
-            else:
-                st.image("https://via.placeholder.com/500x750.png?text=No+Poster+Available", caption="No Poster Available")
+                if movie_info["poster_url"]:
+                    st.image(movie_info["poster_url"], caption=movie['title'], width=150)
+                else:
+                    st.image("https://via.placeholder.com/150x225.png?text=No+Poster+Available", caption="No Poster Available")
 
+# Top Rated Movies button
 if st.button("Top Rated Movies"):
     top_url = f"https://api.themoviedb.org/3/movie/top_rated?api_key={API_KEY}"
     response = requests.get(top_url)
     top_data = response.json()
 
-    st.subheader("🎯 Top Rated Movies from TMDb:")
-    for movie in top_data.get("results", [])[:5]:
-        st.write(f"**👉 {movie['title']}**")
-        st.markdown(f"⭐ **Rating:** {movie['vote_average']} / 10 ({movie['vote_count']} votes)")
-        st.markdown(f"📖 {movie['overview']}")
-        poster_url = f"https://image.tmdb.org/t/p/w500{movie['poster_path']}" if movie.get("poster_path") else None
-        if poster_url:
-            st.image(poster_url, caption=movie["title"])
+    st
