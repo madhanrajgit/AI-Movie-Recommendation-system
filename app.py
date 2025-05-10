@@ -3,13 +3,15 @@ import pandas as pd
 import requests
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+from difflib import get_close_matches
 
-# Load your movie dataset
+# Load dataset
 movies = pd.read_csv("merged_movies.csv")
 movies.fillna('', inplace=True)
+movies['title_lower'] = movies['title'].str.lower()  # Lowercase titles for better matching
 
 # TMDb API setup
-TMDB_API_KEY = 'your_tmdb_api_key_here'
+TMDB_API_KEY = '887f725faa2dadb468b5baef8c697023'
 
 # Function to fetch movie rating from TMDb
 def fetch_movie_rating(title):
@@ -19,30 +21,35 @@ def fetch_movie_rating(title):
         return response['results'][0].get('vote_average', 'N/A')
     return 'N/A'
 
-# TF-IDF vectorizer for overview-based recommendations
+# Find best-matching movie title
+def find_closest_match(title):
+    matches = get_close_matches(title.lower(), movies['title_lower'], n=1, cutoff=0.6)
+    return matches[0] if matches else None
+
+# TF-IDF for overview-based recommendations
 vectorizer = TfidfVectorizer(stop_words='english')
 tfidf_matrix = vectorizer.fit_transform(movies['overview'])
-
-# Cosine similarity matrix
 cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
 
-# Genre-based movie lookup
+# Genre-based recommendations
 def genre_based_recommendations(title):
-    if title not in movies['title'].values:
-        return []
-    genre = movies[movies['title'] == title]['genres'].values[0]
+    matched_title = find_closest_match(title)
+    if not matched_title:
+        return pd.DataFrame()
+    genre = movies[movies['title_lower'] == matched_title]['genres'].values[0]
     return movies[movies['genres'] == genre].sort_values(by='popularity', ascending=False).head(5)
 
-# Overview-based recommendation
+# Overview-based recommendations
 def overview_based_recommendations(title):
-    if title not in movies['title'].values:
-        return []
-    idx = movies[movies['title'] == title].index[0]
+    matched_title = find_closest_match(title)
+    if not matched_title:
+        return pd.DataFrame()
+    idx = movies[movies['title_lower'] == matched_title].index[0]
     sim_scores = sorted(list(enumerate(cosine_sim[idx])), key=lambda x: x[1], reverse=True)[1:6]
     movie_indices = [i[0] for i in sim_scores]
     return movies.iloc[movie_indices]
 
-# Rating-based top movies
+# Top rated movies from TMDb
 def top_rated_movies():
     url = f"https://api.themoviedb.org/3/movie/top_rated?api_key={TMDB_API_KEY}&language=en-US&page=1"
     response = requests.get(url).json()
@@ -73,43 +80,55 @@ movie_input = st.text_input("🎥 Enter a movie name:")
 
 if st.button("🚀 Recommend"):
     if movie_input:
-        st.subheader("🎯 Based on Overview")
-        overview_recs = overview_based_recommendations(movie_input.title())
-        for _, row in overview_recs.iterrows():
-            st.markdown(f"**🎬 {row['title']}**")
-            st.markdown(f"**📘 Overview:** {row['overview']}")
-            st.markdown(f"⭐ Rating: {fetch_movie_rating(row['title'])}/10")
-            poster_url = row.get('poster_path')
-            if pd.notna(poster_url):
-                st.image(f"https://image.tmdb.org/t/p/w200{poster_url}", width=120)
-            else:
-                st.markdown("🖼 No poster available.")
-            st.markdown("---")
+        matched_movie = find_closest_match(movie_input)
+        if matched_movie:
+            st.subheader(f"🎯 Recommendations for: **{matched_movie.title()}**")
 
-        st.subheader("🎭 Based on Genre")
-        genre_recs = genre_based_recommendations(movie_input.title())
-        for _, row in genre_recs.iterrows():
-            st.markdown(f"**🎬 {row['title']}**")
-            st.markdown(f"**📘 Overview:** {row['overview']}")
-            st.markdown(f"⭐ Rating: {fetch_movie_rating(row['title'])}/10")
-            poster_url = row.get('poster_path')
-            if pd.notna(poster_url):
-                st.image(f"https://image.tmdb.org/t/p/w200{poster_url}", width=120)
+            st.subheader("📘 Based on Overview")
+            overview_recs = overview_based_recommendations(matched_movie)
+            if not overview_recs.empty:
+                for _, row in overview_recs.iterrows():
+                    st.markdown(f"**🎬 {row['title']}**")
+                    st.markdown(f"📘 Overview: {row['overview']}")
+                    st.markdown(f"⭐ Rating: {fetch_movie_rating(row['title'])}/10")
+                    poster_url = row.get('poster_path')
+                    if pd.notna(poster_url):
+                        st.image(f"https://image.tmdb.org/t/p/w200{poster_url}", width=120)
+                    else:
+                        st.markdown("🖼 No poster available.")
+                    st.markdown("---")
             else:
-                st.markdown("🖼 No poster available.")
-            st.markdown("---")
+                st.markdown("⚠ No overview-based recommendations available.")
 
-        st.subheader("⭐ Top Rated Movies (TMDb)")
-        top_rated = top_rated_movies()
-        for movie in top_rated:
-            st.markdown(f"**🎬 {movie['title']}**")
-            st.markdown(f"**📘 Overview:** {movie['overview']}")
-            st.markdown(f"⭐ Rating: {movie['rating']}/10")
-            poster_url = movie.get('poster_path')
-            if poster_url:
-                st.image(f"https://image.tmdb.org/t/p/w200{poster_url}", width=120)
+            st.subheader("🎭 Based on Genre")
+            genre_recs = genre_based_recommendations(matched_movie)
+            if not genre_recs.empty:
+                for _, row in genre_recs.iterrows():
+                    st.markdown(f"**🎬 {row['title']}**")
+                    st.markdown(f"📘 Overview: {row['overview']}")
+                    st.markdown(f"⭐ Rating: {fetch_movie_rating(row['title'])}/10")
+                    poster_url = row.get('poster_path')
+                    if pd.notna(poster_url):
+                        st.image(f"https://image.tmdb.org/t/p/w200{poster_url}", width=120)
+                    else:
+                        st.markdown("🖼 No poster available.")
+                    st.markdown("---")
             else:
-                st.markdown("🖼 No poster available.")
-            st.markdown("---")
+                st.markdown("⚠ No genre-based recommendations available.")
+
+            st.subheader("⭐ Top Rated Movies (TMDb)")
+            top_rated = top_rated_movies()
+            for movie in top_rated:
+                st.markdown(f"**🎬 {movie['title']}**")
+                st.markdown(f"📘 Overview: {movie['overview']}")
+                st.markdown(f"⭐ Rating: {movie['rating']}/10")
+                poster_url = movie.get('poster_path')
+                if poster_url:
+                    st.image(f"https://image.tmdb.org/t/p/w200{poster_url}", width=120)
+                else:
+                    st.markdown("🖼 No poster available.")
+                st.markdown("---")
+        else:
+            st.error("❌ Movie not found. Try another name!")
     else:
         st.error("❌ Please enter a valid movie name.")
