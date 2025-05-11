@@ -1,134 +1,168 @@
 import streamlit as st
 import pandas as pd
 import requests
+import os
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from difflib import get_close_matches
+from fuzzywuzzy import process
 
-# Load dataset
-movies = pd.read_csv("merged_movies.csv")
-movies.fillna('', inplace=True)
-movies['title_lower'] = movies['title'].str.lower()
+# --- Configuration ---
+try:
+    API_KEY = st.secrets["887f725faa2dadb468b5baef8c697023"]  # Use Streamlit secrets for secure API key storage
+except KeyError:
+    API_KEY = os.getenv("887f725faa2dadb468b5baef8c697023")  # Fallback to environment variable
+    if not API_KEY:
+        st.error("API key not found. Please set it in Streamlit secrets or environment variables.")
+        st.stop()
 
-# TMDb API setup
-TMDB_API_KEY = "887f725faa2dadb468b5baef8c697023"
+# --- Data Loading and Preprocessing ---
+@st.cache_data
+def load_data():
+    """Load and preprocess the movie dataset."""
+    if not os.path.exists("merged_movies.csv"):
+        st.error("Dataset 'merged_movies.csv' not found!")
+        st.stop()
+    
+    df = pd.read_csv("merged_movies.csv")
+    df.columns = df.columns.str.strip()
+    required_columns = ["title", "overview", "popularity"]
+    if not all(col in df.columns for col in required_columns):
+        st.error("Dataset missing required columns: title, overview, popularity")
+        st.stop()
+    
+    df["overview"] = df["overview"].fillna("Overview not available")
+    return df
 
-# Function to fetch movie rating & poster
-def fetch_movie_details(title):
-    url = f"https://api.themoviedb.org/3/search/movie?api_key={TMDB_API_KEY}&query={title}"
-    response = requests.get(url).json()
-    if response.get('results'):
-        movie_data = response['results'][0]
-        return movie_data.get('vote_average', 'N/A'), movie_data.get('poster_path', None)
-    return 'N/A', None
+# --- TF-IDF and Similarity Computation ---
+@st.cache_resource
+def compute_similarity(df):
+    """Compute TF-IDF vectors and cosine similarity matrix."""
+    tfidf = TfidfVectorizer(stop_words="english")
+    vector = tfidf.fit_transform(df["overview"])
+    similarity = cosine_similarity(vector)
+    return similarity
 
-# Find closest matching title
-def find_closest_match(title):
-    matches = get_close_matches(title.lower(), movies['title_lower'], n=1, cutoff=0.6)
-    return matches[0] if matches else None
+# --- TMDb API Functions ---
+@st.cache_data
+def get_movie_info(movie_title):
+    """Fetch movie details from TMDb API."""
+    try:
+        url = f"https://api.themoviedb.org/3/search/movie?api_key={API_KEY}&query={movie_title}"
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+        if data["results"]:
+            result = data["results"][0]
+            return {
+                "poster_url": f"https://image.tmdb.org/t/p/w500{result['poster_path']}" if result.get("poster_path") else None,
+                "rating": result.get("vote_average", "N/A"),
+                "vote_count": result.get("vote_count", "N/A")
+            }
+        return {"poster_url": None, "rating": "N/A", "vote_count": "N/A"}
+    except requests.RequestException as e:
+        st.error(f"Error fetching movie info for '{movie_title}': {e}")
+        return {"poster_url": None, "rating": "N/A", "vote_count": "N/A"}
 
-# TF-IDF setup
-vectorizer = TfidfVectorizer(stop_words='english')
-tfidf_matrix = vectorizer.fit_transform(movies['overview'])
-cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
+@st.cache_data
+def get_top_rated_movies():
+    """Fetch top-rated movies from TMDb API."""
+    try:
+        url = f"https://api.themoviedb.org/3/movie/top_rated?api_key={API_KEY}"
+        response = requests.get(url)
+        response.raise_for_status()
+        return response.json().get("results", [])[:5]
+    except requests.RequestException as e:
+        st.error(f"Error fetching top-rated movies: {e}")
+        return []
 
-# Overview-based recommendations
-def overview_based_recommendations(title):
-    matched_title = find_closest_match(title)
-    if not matched_title:
-        return pd.DataFrame()
-    idx = movies[movies['title_lower'] == matched_title].index[0]
-    sim_scores = sorted(list(enumerate(cosine_sim[idx])), key=lambda x: x[1], reverse=True)[1:6]
-    movie_indices = [i[0] for i in sim_scores]
-    return movies.iloc[movie_indices]
+# --- Recommendation Logic ---
+def recommend(movie_title, df, similarity):
+    """Generate movie recommendations based on input title."""
+    movie_title_lower = movie_title.lower()
+    movie_list = df["title"].str.lower().tolist()
+    results = []
 
-# Genre-based recommendations
-def genre_based_recommendations(title):
-    matched_title = find_closest_match(title)
-    if not matched_title:
-        return pd.DataFrame()
-    genre = movies[movies['title_lower'] == matched_title]['genres'].values[0]
-    return movies[movies['genres'] == genre].sort_values(by='popularity', ascending=False).head(5)
+    # Fuzzy matching for better search
+    match = process.extractOne(movie_title_lower, movie_list)
+    if match and match[1] > 80:  # Threshold for similarity
+        idx = movie_list.index(match[0])
+        searched_movie_title = df.loc[idx, "title"]
+        searched_movie_overview = df.loc[idx, "overview"]
+        movie_info = get_movie_info(searched_movie_title)
 
-# Top-rated movies from TMDb
-def top_rated_movies():
-    url = f"https://api.themoviedb.org/3/movie/top_rated?api_key={TMDB_API_KEY}&language=en-US&page=1"
-    response = requests.get(url).json()
-    top_movies = []
-    if response.get('results'):
-        for item in response['results'][:5]:
-            top_movies.append({
-                'title': item['title'],
-                'overview': item['overview'],
-                'rating': item.get('vote_average', 'N/A'),
-                'poster_path': item.get('poster_path')
-            })
-    return top_movies
-
-# Streamlit UI
-st.set_page_config(page_title="AI Movie Recommender System", layout="wide")
-st.markdown("""
-    <style>
-        .stApp { background-color: #111; color: white; }
-        .title-style { font-size: 40px; font-weight: bold; color: #f4c10f; }
-        .section { border-bottom: 2px solid #444; padding: 10px 0; }
-    </style>
-""", unsafe_allow_html=True)
-
-st.markdown('<div class="title-style">🎬 AI Movie Recommender System</div>', unsafe_allow_html=True)
-
-movie_input = st.text_input("🎥 Enter a movie name:")
-
-if st.button("🚀 Recommend"):
-    if movie_input:
-        matched_movie = find_closest_match(movie_input)
-        if matched_movie:
-            st.subheader(f"🎯 Recommendations for: **{matched_movie.title()}**")
-
-            st.subheader("📘 Based on Overview")
-            overview_recs = overview_based_recommendations(matched_movie)
-            if not overview_recs.empty:
-                for _, row in overview_recs.iterrows():
-                    st.markdown(f"**🎬 {row['title']}**")
-                    st.markdown(f"📘 Overview: {row.get('overview', '⚠ No overview available.')}")
-                    rating, poster_url = fetch_movie_details(row['title'])
-                    st.markdown(f"⭐ Rating: {rating}/10")
-                    if poster_url:
-                        st.image(f"https://image.tmdb.org/t/p/w200{poster_url}", width=120)
-                    else:
-                        st.markdown("🖼 No poster available.")
-                    st.markdown("---")
-            else:
-                st.markdown("⚠ No overview-based recommendations available.")
-
-            st.subheader("🎭 Based on Genre")
-            genre_recs = genre_based_recommendations(matched_movie)
-            if not genre_recs.empty:
-                for _, row in genre_recs.iterrows():
-                    st.markdown(f"**🎬 {row['title']}**")
-                    st.markdown(f"📘 Overview: {row.get('overview', '⚠ No overview available.')}")
-                    rating, poster_url = fetch_movie_details(row['title'])
-                    st.markdown(f"⭐ Rating: {rating}/10")
-                    if poster_url:
-                        st.image(f"https://image.tmdb.org/t/p/w200{poster_url}", width=120)
-                    else:
-                        st.markdown("🖼 No poster available.")
-                    st.markdown("---")
-            else:
-                st.markdown("⚠ No genre-based recommendations available.")
-
-            st.subheader("⭐ Top Rated Movies (TMDb)")
-            top_rated = top_rated_movies()
-            for movie in top_rated:
-                st.markdown(f"**🎬 {movie['title']}**")
-                st.markdown(f"📘 Overview: {movie.get('overview', '⚠ No overview available.')}")
-                st.markdown(f"⭐ Rating: {movie['rating']}/10")
-                if movie.get('poster_path'):
-                    st.image(f"https://image.tmdb.org/t/p/w200{movie['poster_path']}", width=120)
-                else:
-                    st.markdown("🖼 No poster available.")
-                st.markdown("---")
+        # Display searched movie
+        st.subheader(f"✅ Your searched movie: {searched_movie_title}")
+        st.markdown(f"📖 **Overview:** {searched_movie_overview}")
+        st.markdown(f"⭐ **Rating:** {movie_info['rating']} / 10 ({movie_info['vote_count']} votes)")
+        if movie_info["poster_url"]:
+            st.image(movie_info["poster_url"], caption=searched_movie_title, width=200)
         else:
-            st.error("❌ Movie not found. Try another name!")
+            st.image("https://via.placeholder.com/500x750.png?text=No+Poster+Available", caption="No Poster Available", width=200)
+
+        # Get recommendations
+        recommended_movies = sorted(list(enumerate(similarity[idx])), key=lambda x: x[1], reverse=True)[1:6]
+        results = [
+            {"title": df.loc[i[0], "title"], "overview": df.loc[i[0], "overview"]}
+            for i in recommended_movies
+        ]
     else:
-        st.error("❌ Please enter a valid movie name.")
+        st.subheader(f"❌ Movie '{movie_title}' not found. Showing top popular movies!")
+        top_popular = df.sort_values("popularity", ascending=False).head(5)
+        results = [
+            {"title": row["title"], "overview": row["overview"]}
+            for _, row in top_popular.iterrows()
+        ]
+
+    return results
+
+# --- Streamlit UI ---
+def main():
+    """Main function to run the Streamlit app."""
+    st.title("🎬 AI Movie Recommender")
+    st.markdown("Enter a movie title to get recommendations or view top-rated movies from TMDb!")
+
+    # Load data and compute similarity
+    df = load_data()
+    similarity = compute_similarity(df)
+
+    # Movie input and recommendation
+    movie_input = st.text_input("Enter a movie name:", "")
+    if st.button("Recommend"):
+        if movie_input.strip():
+            results = recommend(movie_input, df, similarity)
+            
+            # Display recommendations in a grid
+            st.subheader("🎥 Recommended Movies")
+            cols = st.columns(3)
+            for i, movie in enumerate(results):
+                with cols[i % 3]:
+                    st.write(f"**👉 {movie['title']}**")
+                    st.markdown(f"📖 **Overview:** {movie['overview']}")
+                    movie_info = get_movie_info(movie['title'])
+                    st.markdown(f"⭐ **Rating:** {movie_info['rating']} / 10 ({movie_info['vote_count']} votes)")
+                    if movie_info["poster_url"]:
+                        st.image(movie_info["poster_url"], caption=movie['title'], width=150)
+                    else:
+                        st.image("https://via.placeholder.com/500x750.png?text=No+Poster+Available", caption="No Poster Available", width=150)
+        else:
+            st.warning("Please enter a movie title!")
+
+    # Top-rated movies
+    if st.button("Top Rated Movies"):
+        top_movies = get_top_rated_movies()
+        if top_movies:
+            st.subheader("🎯 Top Rated Movies from TMDb")
+            cols = st.columns(3)
+            for i, movie in enumerate(top_movies):
+                with cols[i % 3]:
+                    st.write(f"**👉 {movie['title']}**")
+                    st.markdown(f"⭐ **Rating:** {movie['vote_average']} / 10 ({movie['vote_count']} votes)")
+                    st.markdown(f"📖 **Overview:** {movie['overview']}")
+                    poster_url = f"https://image.tmdb.org/t/p/w500{movie['poster_path']}" if movie.get("poster_path") else None
+                    if poster_url:
+                        st.image(poster_url, caption=movie["title"], width=150)
+                    else:
+                        st.image("https://via.placeholder.com/500x750.png?text=No+Poster+Available", caption="No Poster Available", width=150)
+
+if __name__ == "__main__":
+    main()
