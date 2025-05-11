@@ -8,9 +8,9 @@ from fuzzywuzzy import process
 
 # --- Configuration ---
 try:
-    API_KEY = st.secrets[887f725faa2dadb468b5baef8c697023]  # Use Streamlit secrets for secure API key storage
+    API_KEY = st.secrets["API_KEY"]  # Use Streamlit secrets for secure API key storage
 except KeyError:
-    API_KEY = os.getenv(887f725faa2dadb468b5baef8c697023)  # Fallback to environment variable
+    API_KEY = os.getenv("TMDB_API_KEY")  # Fallback to environment variable
     if not API_KEY:
         st.error("API key not found. Please set it in Streamlit secrets or environment variables.")
         st.stop()
