@@ -1,11 +1,6 @@
 streamlit
-surprise
-fuzzywuzzy
 pandas
-numpy
-scikit-learn
-scipy
-python-Levenshtein
 requests
-matplotlib
-plotly
+scikit-learn
+fuzzywuzzy
+python-Levenshtein
