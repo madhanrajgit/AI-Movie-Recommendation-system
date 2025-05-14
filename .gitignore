@@ -1,0 +1,4 @@
+.streamlit/secrets.toml
+data/tmdb_movies.csv
+similarity_*.pkl
+users.db
