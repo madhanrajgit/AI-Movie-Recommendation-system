@@ -4,6 +4,7 @@ requests
 scikit-learn
 fuzzywuzzy
 python-Levenshtein
-surprise
+scikit-surprise
 pyrebase4
-bcrypt gdown
+bcrypt
+gdown
