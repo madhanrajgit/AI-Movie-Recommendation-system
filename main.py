@@ -53,11 +53,11 @@ def parse_genres(genre_str):
 
 # --- Data Loading ---
 @st.cache_data
-def load_data(tmdb_file="data/tmdb_movies.csv"):
+def load_data(tmdb_file="data/dataset.csv"):
     data_dir = "data"
     if not os.path.exists(data_dir):
         os.makedirs(data_dir)
-        gdown.download("https://drive.google.com/uc?id=your_file_id", os.path.join(data_dir, "tmdb_movies.csv"), quiet=False)
+        gdown.download("https://drive.google.com/uc?id=1yT-dZ2KobwnWJN2vpQ0g-Ybpex9KQGgc", os.path.join(data_dir, "dataset.csv"), quiet=False)
     
     try:
         df = pd.read_csv(tmdb_file, usecols=[
