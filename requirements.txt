@@ -1,10 +1,5 @@
 streamlit
 pandas
-requests
+numpy
 scikit-learn
-fuzzywuzzy
-python-Levenshtein
 scikit-surprise
-pyrebase4
-bcrypt
-gdown
